@@ -221,6 +221,7 @@ Operacao = ${data.operation}
 Resultado nos LEDs = ${data.resultBin}
 Resultado interpretado = ${data.resultSigned}
 Resultado exato = ${data.exactResult}
+Tempo de calculo = ${data.elapsedMicros} us
 
 Overflow = ${overflowText}
         </pre>
@@ -262,6 +263,8 @@ void handleCalc() {
   bool usesB = true;
 
   // Aritmetica implementada no ESP32, nao no Javascript.
+  uint32_t startMicros = micros();
+
   if (op == "add") {
     exactResult = signed4(a) + signed4(b);
     result = exactResult & 0x0F;
@@ -294,6 +297,8 @@ void handleCalc() {
     server.send(400, "application/json", "{\"error\":\"Operacao invalida\"}");
     return;
   }
+
+  uint32_t elapsedMicros = micros() - startMicros;
 
   writeLeds(result);
 
@@ -330,6 +335,10 @@ void handleCalc() {
   Serial.print("Overflow: ");
   Serial.println(overflow ? "SIM" : "NAO");
 
+  Serial.print("Tempo de calculo: ");
+  Serial.print(elapsedMicros);
+  Serial.println(" us");
+
   String json = "{";
   json += "\"aBin\":\"" + bin4(a) + "\",";
   json += "\"bBin\":\"" + bin4(b) + "\",";
@@ -338,6 +347,7 @@ void handleCalc() {
   json += "\"bSigned\":" + String(signed4(b)) + ",";
   json += "\"resultSigned\":" + String(signed4(result)) + ",";
   json += "\"exactResult\":" + String(exactResult) + ",";
+  json += "\"elapsedMicros\":" + String(elapsedMicros) + ",";
   json += "\"operation\":\"" + operationText + "\",";
   json += "\"usesB\":" + String(usesB ? "true" : "false") + ",";
   json += "\"overflow\":" + String(overflow ? "true" : "false");
