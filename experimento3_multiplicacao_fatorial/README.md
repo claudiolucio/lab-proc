@@ -49,6 +49,96 @@ IP: 192.168.4.1
 Servidor HTTP iniciado.
 ```
 
+## Sketch de testes e benchmark
+
+Para reproduzir os testes planejados e coletar tempos experimentais com mais larguras de bits, use o sketch separado:
+
+```text
+experimento3_multiplicacao_fatorial/code/benchmark_multiplication_factorial/benchmark_multiplication_factorial.ino
+```
+
+Esse arquivo fica em uma pasta propria para nao conflitar com o `setup()` e o `loop()` da calculadora principal.
+
+Ele cria outra rede Wi-Fi:
+
+```text
+SSID: ESP32_CALCULADORA_TESTES
+Senha: 12345678
+IP: 192.168.4.1
+```
+
+Depois de gravar esse sketch no ESP32:
+
+1. Conecte-se a rede `ESP32_CALCULADORA_TESTES`.
+2. Abra `http://192.168.4.1/`.
+3. Use a secao `Calculo manual` para testar multiplicacao e fatorial com `4`, `8`, `12`, `16`, `32` ou `64` bits.
+4. Clique em `Executar testes planejados` para validar casos conhecidos.
+5. Clique em `Executar benchmark` para coletar as medidas de tempo.
+
+O benchmark mede, para cada largura de bits, uma multiplicacao e um fatorial com operandos representativos. Cada linha da tabela possui `5` amostras, a media e o desvio padrao. Cada amostra mede uma execucao da operacao no ESP32. A escolha entre multiplicacao e fatorial e feita antes da medicao; o trecho cronometrado usa funcoes separadas para nao incluir um `if` de selecao da operacao.
+
+No calculo manual, o fatorial aceita entradas de `0` a `20`, limite escolhido para manter o resultado exato dentro da representacao interna. A indicacao de overflow continua sendo calculada em relacao a largura selecionada (`4`, `8`, `12`, `16`, `32` ou `64` bits). Para preservar resultados grandes sem depender de `__int128`, o sketch usa operandos em `int64_t`, calcula os bits baixos em `uint64_t` e monta o produto exato em texto decimal.
+
+Os valores usados automaticamente no benchmark usam o maior operando positivo de cada largura para multiplicacao. Para fatorial, o maior valor seguro nesta implementacao e `20!`.
+
+| Bits | Multiplicacao | Fatorial |
+| --- | --- | --- |
+| 4 | `7 x 7` | `7!` |
+| 8 | `127 x 127` | `20!` |
+| 12 | `2047 x 2047` | `20!` |
+| 16 | `32767 x 32767` | `20!` |
+| 32 | `2147483647 x 2147483647` | `20!` |
+| 64 | `9223372036854775807 x 9223372036854775807` | `20!` |
+
+A multiplicacao medida no benchmark nao usa o operador `*` no trecho cronometrado. Ela e feita por soma condicional e deslocamento, no ESP32:
+
+```cpp
+uint64_t multiplyModuloBits(int64_t a, int64_t b, uint8_t bits) {
+  uint64_t mask = maskForBits(bits);
+  uint64_t multiplicand = (uint64_t)a & mask;
+  uint64_t multiplier = (uint64_t)b & mask;
+  uint64_t result = 0;
+
+  for (uint8_t i = 0; i < bits; i++) {
+    if (multiplier & 1ULL) {
+      result = (result + multiplicand) & mask;
+    }
+
+    multiplicand = (multiplicand << 1) & mask;
+    multiplier >>= 1;
+  }
+
+  return result;
+}
+```
+
+O fatorial medido no benchmark tambem fica isolado em uma funcao iterativa no ESP32, com criterio de parada, inicializacao e laco de controle:
+
+```cpp
+int64_t factorialIterative(int64_t n) {
+  if (n <= 1) {
+    return 1;
+  }
+
+  int64_t result = 1;
+
+  for (int64_t i = 2; i <= n; i++) {
+    result *= i;
+  }
+
+  return result;
+}
+```
+
+O resultado aparece na interface em tabela e tambem em formato CSV, pronto para ser incluido no relatorio:
+
+```text
+op,bits,a,b,exact,resultBits,overflow,meanMicros,stddevMicros,samples
+...
+```
+
+Como os tempos dependem da placa, frequencia de clock, core Arduino e carga de execucao, os valores finais devem ser obtidos executando esse sketch no ESP32 usado no experimento.
+
 ## Como acessar a calculadora
 
 1. No computador ou celular, conecte-se a rede Wi-Fi criada pelo ESP32:
