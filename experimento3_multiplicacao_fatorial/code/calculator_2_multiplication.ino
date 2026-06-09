@@ -50,7 +50,7 @@ bool parseBin4(String text, uint8_t &value) {
   value &= 0x0F;
   return true;
 }
-
+//olá
 int8_t signed4(uint8_t value) {
   value &= 0x0F;
 
