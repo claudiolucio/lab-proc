@@ -1,84 +1,71 @@
-# Fechadura Eletrônica — Controle Isolado dos Componentes (PCS3732 · Aula 10)
+# Fechadura eletrônica em Python
 
-Código C++ para **Raspberry Pi 3** (SoC Broadcom BCM2837) que implementa o
-controle/interface **isolado** de cada componente do sistema, seguindo a
-**Regra de Ouro**: *nunca integre um componente que não passou em seu próprio
-teste unitário.*
+Versão Python com integração incremental e pinagem BCM igual à dos
+códigos Freenove fornecidos.
 
-Cada arquivo é um programa autônomo que valida um único periférico antes de
-qualquer integração.
+## Pinagem BCM
 
-## Componentes e requisitos cobertos
+| Componente | Sinal | BCM |
+|---|---|---:|
+| Teclado | linhas | 16, 20, 21, 26 |
+| Teclado | colunas | 19, 13, 6, 5 |
+| HC-SR04 | TRIG | 14 |
+| HC-SR04 | ECHO | 15 |
+| Buzzer ativo | sinal | 18 |
+| LCD I2C | SDA | 2 |
+| LCD I2C | SCL | 3 |
 
-| Programa            | Componente            | Interface        | Requisito |
-|---------------------|-----------------------|------------------|-----------|
-| `teste_teclado`     | Teclado matricial 4x4 | GPIO (varredura) | RF1       |
-| `teste_lcd_i2c`     | Display LCD 16x2      | I2C (SDA/SCL)    | RF2       |
-| `teste_sensor`      | Sensor HC-SR04        | GPIO             | RF3       |
-| `teste_buzzer`      | Buzzer                | GPIO / PWM       | Feedback  |
+Todas as configurações estão em `config.py`.
 
 ## Dependências
 
-- Raspberry Pi OS com I2C habilitado (`sudo raspi-config` → Interface → I2C).
-- Biblioteca **pigpio**:
-
 ```bash
-sudo apt-get update
-sudo apt-get install pigpio libpigpio-dev i2c-tools
+sudo apt update
+sudo apt install python3-pip python3-smbus i2c-tools
+python3 -m pip install -r requirements.txt
 ```
 
-## Compilação
+Habilite o I2C:
 
 ```bash
-make            # compila todos os testes em ./build
-make clean      # remove binários
+sudo raspi-config
 ```
 
-## Execução
-
-O pigpio exige acesso a `/dev/mem`, portanto rode com `sudo`:
+Verifique o endereço do LCD:
 
 ```bash
-sudo ./build/teste_teclado
-sudo ./build/teste_lcd_i2c
-sudo ./build/teste_sensor
-sudo ./build/teste_buzzer
+i2cdetect -y 1
 ```
 
-## Validação isolada de cada componente
+## Testes isolados
 
-**Teclado (RF1)** — cada toque deve gerar **um único** evento (debounce por
-pull-up interno + confirmação temporal). Se aparecerem eventos duplicados,
-aumente `DEBOUNCE_MS`.
-
-**LCD via I2C (RF2)** — antes de rodar, confirme o endereço do display:
+Execute a partir da raiz do projeto:
 
 ```bash
-i2cdetect -y 1      # deve mostrar 0x27 (ou 0x3F) na grade
+sudo python3 00_testes_isolados/teste_teclado.py
+sudo python3 00_testes_isolados/teste_sensor.py
+sudo python3 00_testes_isolados/teste_lcd.py
+sudo python3 00_testes_isolados/teste_buzzer.py
 ```
 
-Ajuste `LCD_ADDR` no código conforme o endereço detectado. O teste deve
-imprimir `Hello World` / `STATUS: OK` nas duas linhas.
+## Testes incrementais
 
-**Sensor (RF3)** — a leitura deve alternar entre `ABERTA` e `FECHADA` conforme
-o obstáculo. **Atenção elétrica:** o pino ECHO do HC-SR04 é de 5V; use um
-divisor resistivo para 3,3V antes do GPIO.
+```bash
+sudo python3 01_sensor/main.py
+sudo python3 02_sensor_teclado/main.py
+sudo python3 03_sensor_teclado_lcd/main.py
+sudo python3 04_sistema_completo/main.py
+```
 
-**Buzzer** — deve emitir bipe curto (sucesso) e bipe longo (falha) audíveis.
+## Sistema completo
 
-## Mapeamento de pinos (numeração BCM — ajuste à sua fiação)
+- senha: `1234`;
+- `#`: confirmar;
+- `*`: limpar;
+- `D`: encerrar;
+- três erros: bloqueio de 10 segundos.
 
-| Sinal            | GPIO (BCM)          |
-|------------------|---------------------|
-| Teclado linhas   | 5, 6, 13, 19        |
-| Teclado colunas  | 12, 16, 20, 21      |
-| LCD I2C          | SDA=2, SCL=3        |
-| Sensor TRIG/ECHO | 23 / 24 (ECHO ~3,3V)|
-| Buzzer           | 18 (PWM)            |
+## Atenção elétrica
 
-## Nota sobre não-bloqueio
-
-Nos testes isolados o uso de `gpioDelay` é aceitável. Na **integração**, a
-temporização do buzzer e as esperas devem ser gerenciadas por uma **máquina de
-estados não-bloqueante**, evitando `sleep()`/delays longos que congelariam a
-varredura do teclado ou a leitura do sensor.
+O ECHO do HC-SR04 opera em aproximadamente 5 V. Use divisor resistivo
+para reduzir o sinal para 3,3 V antes do GPIO BCM 15.
